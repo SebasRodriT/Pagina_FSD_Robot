@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Robot FSD · Control BLE</title>
+  <meta name="description" content="Control del robot ESP32-C3 por Web Bluetooth: modo botones y modo acelerómetro.">
+  <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="modulepreload" href="js/ble.js">
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="9" width="22" height="15" rx="4"/><circle cx="12" cy="16.5" r="2.2"/><circle cx="20" cy="16.5" r="2.2"/><path d="M16 9V5M13 5h6"/><path d="M3 14v6M29 14v6"/></svg>
+      <div>
+        <strong>Robot FSD</strong>
+        <span>Web Bluetooth · ESP32-C3</span>
+      </div>
+    </div>
+    <div class="conn">
+      <span class="pill" id="status" data-state="disconnected"><i></i><span id="statusText">Desconectado</span></span>
+      <button class="btn btn-primary" id="connectBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+        <span>Conectar</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="banner" id="unsupported" hidden>
+    Este navegador no soporta Web Bluetooth. Usa <b>Chrome</b> o <b>Edge</b> en Android, Windows, macOS o Linux
+    (en iPhone, la app <b>Bluefy</b>). La página debe abrirse por <b>HTTPS</b>.
+  </div>
+
+  <main class="layout">
+    <!-- ================= CONTROL ================= -->
+    <section class="card control" aria-labelledby="ctlTitle">
+      <div class="card-head">
+        <h2 id="ctlTitle">Control</h2>
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-buttons" aria-selected="true" aria-controls="panel-buttons">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>Botones
+          </button>
+          <button role="tab" id="tab-tilt" aria-selected="false" aria-controls="panel-tilt">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" transform="rotate(-18 12 12)"/><path d="M11 18h2" transform="rotate(-18 12 12)"/></svg>Acelerómetro
+          </button>
+        </div>
+      </div>
+
+      <!-- Velocidad (compartida por ambos modos) -->
+      <div class="speed">
+        <label for="speed">Velocidad <small>PWM 0–255</small></label>
+        <input type="range" id="speed" min="0" max="255" step="5" value="200">
+        <output id="speedOut" for="speed">200</output>
+      </div>
+
+      <!-- ---------- Modo 1: Botones ---------- -->
+      <div class="panel" id="panel-buttons" role="tabpanel" aria-labelledby="tab-buttons">
+        <div class="dpad" id="dpad">
+          <button class="pad up"    data-cmd="ad" aria-label="Adelante"><svg viewBox="0 0 24 24"><path d="M12 5l7 9H5z"/></svg><span>ad</span></button>
+          <button class="pad left"  data-cmd="ga" aria-label="Girar izquierda"><svg viewBox="0 0 24 24"><path d="M5 12l9-7v14z"/></svg><span>ga</span></button>
+          <button class="pad stop"  data-cmd="stop" aria-label="Detener"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>stop</span></button>
+          <button class="pad right" data-cmd="gh" aria-label="Girar derecha"><svg viewBox="0 0 24 24"><path d="M19 12l-9 7V5z"/></svg><span>gh</span></button>
+          <button class="pad down"  data-cmd="at" aria-label="Atrás"><svg viewBox="0 0 24 24"><path d="M12 19l-7-9h14z"/></svg><span>at</span></button>
+        </div>
+        <div class="opts">
+          <label class="switch"><input type="checkbox" id="holdMode" checked><span></span>Mantener presionado para mover</label>
+          <p class="hint">Teclado: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o flechas · <kbd>Espacio</kbd> detiene</p>
+        </div>
+      </div>
+
+      <!-- ---------- Modo 2: Acelerómetro ---------- -->
+      <div class="panel" id="panel-tilt" role="tabpanel" aria-labelledby="tab-tilt" hidden>
+        <div class="tilt">
+          <div class="level" id="level">
+            <span class="lbl l-up">ad</span><span class="lbl l-down">at</span>
+            <span class="lbl l-left">ga</span><span class="lbl l-right">gh</span>
+            <div class="dead" id="deadRing"></div>
+            <div class="cross"></div>
+            <div class="bubble" id="bubble"></div>
+          </div>
+          <div class="tilt-read">
+            <div class="kv"><span>β adelante/atrás</span><b id="betaOut">—</b></div>
+            <div class="kv"><span>γ izquierda/derecha</span><b id="gammaOut">—</b></div>
+            <div class="kv big"><span>Comando</span><b id="tiltCmd">stop</b></div>
+          </div>
+        </div>
+        <div class="tilt-actions">
+          <button class="btn btn-primary" id="tiltToggle" type="button">Activar acelerómetro</button>
+          <button class="btn" id="calibrate" type="button" disabled>Calibrar cero</button>
+        </div>
+        <div class="opts grid2">
+          <label class="field">Zona muerta <output id="deadOut">15°</output>
+            <input type="range" id="dead" min="5" max="35" step="1" value="15">
+          </label>
+          <label class="switch"><input type="checkbox" id="proportional"><span></span>Velocidad por niveles según inclinación</label>
+          <label class="switch"><input type="checkbox" id="invertY"><span></span>Invertir adelante/atrás</label>
+        </div>
+        <p class="hint">Sostén el celular en vertical, pulsa <b>Calibrar cero</b> en tu posición cómoda y luego inclina. El robot se detiene si sueltas la pestaña o bloqueas la pantalla.</p>
+      </div>
+    </section>
+
+    <!-- ================= TELEMETRÍA ================= -->
+    <section class="card telemetry" aria-labelledby="telTitle">
+      <div class="card-head"><h2 id="telTitle">Telemetría</h2>
+        <label class="switch small" title="writeValueWithoutResponse"><input type="checkbox" id="fastWrite" checked><span></span>Escritura rápida</label>
+      </div>
+      <div class="stats">
+        <div class="stat"><span>Último comando</span><b id="lastCmd">—</b></div>
+        <div class="stat"><span>Escritura</span><b id="txMs">—</b></div>
+        <div class="stat"><span>Ida y vuelta</span><b id="rttMs">—</b></div>
+        <div class="stat"><span>Enviados</span><b id="txCount">0</b></div>
+      </div>
+      <div class="reply"><span>Respuesta del robot</span><p id="lastRx">Esperando conexión…</p></div>
+      <ol class="log" id="log" aria-live="polite"></ol>
+      <form class="manual" id="manual" autocomplete="off">
+        <input id="manualInput" placeholder="Comando manual, p. ej. ad 150" spellcheck="false">
+        <button class="btn" type="submit">Enviar</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- ================= CÓDIGO (punto a) ================= -->
+  <section class="code-sec" id="codigo" aria-labelledby="codeTitle">
+    <div class="code-intro">
+      <p class="eyebrow">Semana 2 · Punto 2(a)</p>
+      <h2 id="codeTitle">Código de conexión Web Bluetooth</h2>
+      <p>El mínimo indispensable para conectar y enviar un comando al robot. Está también como página aislada en <a href="minimo.html">minimo.html</a>.</p>
+    </div>
+    <div class="code-grid">
+<pre class="code"><code><span class="c">// UUIDs definidos en el firmware (main.cpp)</span>
+<span class="k">const</span> SERVICE = <span class="n">0xFFE0</span>;
+<span class="k">const</span> CHAR    = <span class="n">0xFFE1</span>;
+<span class="k">let</span> characteristic;
+
+<span class="k">async function</span> <span class="f">conectar</span>() {
+  <span class="c">// 1 · requestDevice</span>
+  <span class="k">const</span> device = <span class="k">await</span> navigator.bluetooth.<span class="f">requestDevice</span>({
+    filters: [{ services: [SERVICE] }]
+  });
+  <span class="c">// 2 · connect</span>
+  <span class="k">const</span> server = <span class="k">await</span> device.gatt.<span class="f">connect</span>();
+  <span class="c">// 3 · getPrimaryService</span>
+  <span class="k">const</span> service = <span class="k">await</span> server.<span class="f">getPrimaryService</span>(SERVICE);
+  <span class="c">// 4 · getCharacteristic</span>
+  characteristic = <span class="k">await</span> service.<span class="f">getCharacteristic</span>(CHAR);
+}
+
+<span class="k">async function</span> <span class="f">enviar</span>(cmd) {
+  <span class="k">const</span> bytes = <span class="k">new</span> TextEncoder().<span class="f">encode</span>(cmd);
+  <span class="c">// 5 · writeValue</span>
+  <span class="k">await</span> characteristic.<span class="f">writeValue</span>(bytes);
+}
+
+<span class="c">// Uso: el navegador exige un gesto del usuario</span>
+btn.onclick = <span class="k">async</span> () =&gt; {
+  <span class="k">await</span> <span class="f">conectar</span>();
+  <span class="k">await</span> <span class="f">enviar</span>(<span class="s">"ad 200"</span>);
+};</code></pre>
+      <ol class="steps">
+        <li><b>requestDevice</b><p>Abre el selector de dispositivos del navegador y sólo muestra los que anuncian el servicio <code>FFE0</code>. Devuelve un <code>BluetoothDevice</code>. Debe llamarse desde un clic (gesto del usuario).</p></li>
+        <li><b>connect</b><p>Establece la conexión GATT con el ESP32-C3. En el firmware se dispara <code>onConnect</code> y <code>deviceConnected = true</code>.</p></li>
+        <li><b>getPrimaryService</b><p>Busca dentro del robot el servicio primario <code>FFE0</code>, creado con <code>createService(SERVICE_UUID)</code>.</p></li>
+        <li><b>getCharacteristic</b><p>Obtiene la característica <code>FFE1</code> (el “buzón”), con permisos READ, WRITE, WRITE_NR y NOTIFY.</p></li>
+        <li><b>writeValue</b><p>Escribe los bytes UTF-8 del texto (<code>"ad 200"</code>) en <code>FFE1</code>. El firmware lo recibe en <code>onWrite</code> y lo pasa a <code>procesarComando()</code>, que mueve los motores.</p></li>
+      </ol>
+    </div>
+    <div class="cmds">
+      <h3>Comandos que entiende el firmware</h3>
+      <table>
+        <thead><tr><th>Comando</th><th>Acción</th><th>Motor A</th><th>Motor B</th></tr></thead>
+        <tbody>
+          <tr><td><code>ad #</code></td><td>Avanzar</td><td>adelante</td><td>adelante</td></tr>
+          <tr><td><code>at #</code></td><td>Retroceder</td><td>atrás</td><td>atrás</td></tr>
+          <tr><td><code>gh #</code></td><td>Girar derecha (horario)</td><td>adelante</td><td>quieto</td></tr>
+          <tr><td><code>ga #</code></td><td>Girar izquierda (antihorario)</td><td>quieto</td><td>adelante</td></tr>
+          <tr><td><code>stop</code></td><td>Detener</td><td>0</td><td>0</td></tr>
+        </tbody>
+      </table>
+      <p class="hint"><code>#</code> es la velocidad PWM de 0 a 255 (8 bits, 1 kHz).</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Fundamentos de Sistemas Digitales · Universidad de los Andes · 2026</span>
+    <span>Firmware base: Fredy Segura-Quijano · PRJ-3-BLE-MOTORS-V1</span>
+  </footer>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

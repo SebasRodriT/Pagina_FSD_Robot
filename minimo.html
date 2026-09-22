@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot FSD · Conexión mínima</title>
+</head>
+<body style="font-family:system-ui;padding:24px">
+  <h1>Conexión mínima Web Bluetooth</h1>
+  <button id="btn">Conectar y enviar "ad 200"</button>
+  <button id="stop">stop</button>
+  <p id="out"></p>
+
+  <script>
+    const SERVICE = 0xFFE0;   // servicio del firmware
+    const CHAR    = 0xFFE1;   // característica donde se escriben comandos
+    let characteristic;
+
+    async function conectar() {
+      // 1. requestDevice: el usuario elige el robot en el selector del navegador
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE] }]
+      });
+      // 2. connect: abre la conexión GATT
+      const server = await device.gatt.connect();
+      // 3. getPrimaryService: obtiene el servicio FFE0
+      const service = await server.getPrimaryService(SERVICE);
+      // 4. getCharacteristic: obtiene la característica FFE1
+      characteristic = await service.getCharacteristic(CHAR);
+    }
+
+    async function enviar(cmd) {
+      // 5. writeValue: envía el texto del comando como bytes UTF-8
+      await characteristic.writeValue(new TextEncoder().encode(cmd));
+      document.getElementById('out').textContent = 'Enviado: ' + cmd;
+    }
+
+    document.getElementById('btn').onclick = async () => {
+      try {
+        if (!characteristic) await conectar();
+        await enviar('ad 200');
+      } catch (e) {
+        document.getElementById('out').textContent = 'Error: ' + e.message;
+      }
+    };
+    document.getElementById('stop').onclick = () => characteristic && enviar('stop');
+  </script>
+</body>
+</html>
