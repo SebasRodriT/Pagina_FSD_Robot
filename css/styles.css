@@ -361,3 +361,107 @@ td code { color: var(--accent); font-weight: 700; }
   .tabs button { flex: 1; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ================= Selects ================= */
+select {
+  width: 100%; height: 40px; margin-top: 6px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: 500 0.88rem var(--sans);
+}
+select:focus { outline: none; border-color: var(--accent); }
+.field select { flex-basis: 100%; }
+
+/* ================= Estado de modo ================= */
+.mode-status {
+  display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 0.85rem; color: var(--muted);
+}
+.mode-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.mode-status[data-state="starting"]::before { background: var(--warn); animation: pulse 0.9s infinite; }
+.mode-status[data-state="listening"] { color: var(--text); }
+.mode-status[data-state="listening"]::before { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent); }
+.mode-status[data-state="error"] { color: var(--err); }
+.mode-status[data-state="error"]::before { background: var(--err); }
+
+/* ================= Modo voz ================= */
+.voice { display: grid; gap: 10px; justify-items: center; }
+.mic {
+  position: relative; width: 132px; height: 132px; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; align-content: center; gap: 6px; margin: 4px 0;
+  border: 1px solid var(--line); background: radial-gradient(circle at 50% 35%, var(--surface-2), var(--bg-2));
+  font-size: 0.75rem; font-weight: 600; color: var(--muted); touch-action: manipulation;
+  transition: transform 0.08s, background 0.15s;
+}
+.mic svg { width: 40px; height: 40px; fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; }
+.mic:active { transform: scale(0.96); }
+.mic:disabled { opacity: 0.45; cursor: not-allowed; }
+.mic.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.mic.on svg { stroke: var(--accent-ink); }
+.mic.on::after {
+  content: ""; position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid var(--accent); animation: ring 1.4s ease-out infinite;
+}
+@keyframes ring { from { opacity: 0.8; transform: scale(0.95); } to { opacity: 0; transform: scale(1.25); } }
+.voice .mode-status { margin: 0; }
+.voice .kv { width: 100%; }
+.transcript {
+  width: 100%; padding: 12px 14px; border-radius: 12px; min-height: 64px;
+  background: var(--bg-2); border: 1px solid var(--line);
+}
+.transcript span { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.transcript p { margin: 2px 0 0; font-size: 1.05rem; font-style: italic; color: var(--muted); overflow-wrap: anywhere; }
+.transcript p.final { font-style: normal; color: var(--text); }
+
+.vocab { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 10px; border-radius: 999px;
+  background: var(--bg-2); border: 1px solid var(--line); font-size: 0.78rem; color: var(--muted);
+}
+.chip b { color: var(--text); font-weight: 700; }
+.chip.stop b { color: var(--err); }
+.chip.hit { animation: hit 0.7s ease-out; }
+@keyframes hit {
+  0% { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  100% { background: var(--bg-2); }
+}
+
+/* ================= Modo gestos ================= */
+.stage {
+  position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 16px;
+  background: var(--bg-2); border: 1px solid var(--line);
+}
+.stage video, .stage canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  transform: scaleX(-1); /* espejo: se ve como en un espejo */
+}
+.stage video { opacity: 0; transition: opacity 0.2s; }
+.stage.live video { opacity: 1; }
+.stage-empty {
+  position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 8px;
+  color: var(--muted); font-size: 0.85rem;
+}
+.stage-empty svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.stage.live .stage-empty { display: none; }
+.stage-fps {
+  position: absolute; right: 10px; top: 10px; padding: 3px 8px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font: 600 0.72rem var(--mono);
+}
+.stage-fps:empty { display: none; }
+.gesture-read { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; margin-top: 12px; }
+.gesture-read .kv b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;
+}
+.legend li {
+  display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--line);
+  font-size: 0.78rem; color: var(--muted); transition: background 0.12s, border-color 0.12s;
+}
+.legend i { font-style: normal; font-size: 1.3rem; line-height: 1; }
+.legend b { font: 700 0.78rem var(--mono); color: var(--accent); min-width: 4ch; }
+.legend li.active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+
+@media (max-width: 520px) {
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .tabs button { flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 0.72rem; }
+  .gesture-read { grid-template-columns: minmax(0, 1fr); }
+}

@@ -4,12 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Robot FSD · Control BLE</title>
-  <meta name="description" content="Control del robot ESP32-C3 por Web Bluetooth: modo botones y modo acelerómetro.">
+  <meta name="description" content="Control del robot ESP32-C3 por Web Bluetooth: botones, acelerómetro, voz y gestos de mano.">
   <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="modulepreload" href="js/ble.js">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
   <link rel="stylesheet" href="css/styles.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -47,6 +49,12 @@
           </button>
           <button role="tab" id="tab-tilt" aria-selected="false" aria-controls="panel-tilt">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" transform="rotate(-18 12 12)"/><path d="M11 18h2" transform="rotate(-18 12 12)"/></svg>Acelerómetro
+          </button>
+          <button role="tab" id="tab-voice" aria-selected="false" aria-controls="panel-voice">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Voz
+          </button>
+          <button role="tab" id="tab-gesture" aria-selected="false" aria-controls="panel-gesture">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V13m0-4.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.6L4.3 15a1.6 1.6 0 0 1 2.6-1.9L8 14.5"/></svg>Gestos
           </button>
         </div>
       </div>
@@ -101,6 +109,79 @@
           <label class="switch"><input type="checkbox" id="invertY"><span></span>Invertir adelante/atrás</label>
         </div>
         <p class="hint">Sostén el celular en vertical, pulsa <b>Calibrar cero</b> en tu posición cómoda y luego inclina. El robot se detiene si sueltas la pestaña o bloqueas la pantalla.</p>
+      </div>
+
+      <!-- ---------- Modo 3: Voz ---------- -->
+      <div class="panel" id="panel-voice" role="tabpanel" aria-labelledby="tab-voice" hidden>
+        <div class="voice">
+          <button class="mic" id="voiceToggle" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            <span>Activar micrófono</span>
+          </button>
+          <p class="mode-status" id="voiceStatus" data-state="idle">Micrófono apagado</p>
+          <div class="transcript"><span>Escuchado</span><p id="voiceTranscript">—</p></div>
+          <div class="kv big"><span>Comando</span><b id="voiceCmd">stop</b></div>
+        </div>
+        <div class="vocab" id="voiceVocab">
+          <span class="chip" data-action="ad"><b>Adelante</b> adelante · avanza · sigue</span>
+          <span class="chip" data-action="at"><b>Atrás</b> atrás · retrocede · reversa</span>
+          <span class="chip" data-action="gh"><b>Derecha</b> derecha</span>
+          <span class="chip" data-action="ga"><b>Izquierda</b> izquierda</span>
+          <span class="chip stop" data-action="stop"><b>Detener</b> para · alto · detente · stop</span>
+          <span class="chip" data-action="faster"><b>+ Velocidad</b> rápido · acelera</span>
+          <span class="chip" data-action="slower"><b>− Velocidad</b> lento · despacio</span>
+        </div>
+        <div class="opts grid2">
+          <label class="field">Idioma
+            <select id="voiceLang">
+              <option value="es-CO" selected>Español (Colombia)</option>
+              <option value="es-ES">Español (España)</option>
+              <option value="es-MX">Español (México)</option>
+              <option value="en-US">English (US)</option>
+            </select>
+          </label>
+          <label class="field">Duración de cada movimiento
+            <select id="voicePulse">
+              <option value="0" selected>Continuo hasta decir “para”</option>
+              <option value="1000">1 segundo</option>
+              <option value="2000">2 segundos</option>
+              <option value="3000">3 segundos</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">Usa la Web Speech API del navegador (Chrome o Edge; necesita internet). Actúa sobre los resultados parciales, así el robot reacciona mientras todavía hablas.</p>
+      </div>
+
+      <!-- ---------- Modo 4: Gestos de mano ---------- -->
+      <div class="panel" id="panel-gesture" role="tabpanel" aria-labelledby="tab-gesture" hidden>
+        <div class="stage" id="gestureStage">
+          <video id="gestureVideo" playsinline muted></video>
+          <canvas id="gestureCanvas"></canvas>
+          <div class="stage-empty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v13H3z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>La cámara está apagada</span>
+          </div>
+          <span class="stage-fps" id="gestureFps"></span>
+        </div>
+        <div class="gesture-read">
+          <div class="kv"><span>Gesto</span><b id="gestureLabel">—</b></div>
+          <div class="kv big"><span>Comando</span><b id="gestureCmd">stop</b></div>
+        </div>
+        <div class="tilt-actions">
+          <button class="btn btn-primary" id="gestureToggle" type="button"><span>Activar cámara</span></button>
+        </div>
+        <p class="mode-status" id="gestureStatus" data-state="idle">Cámara apagada</p>
+        <ul class="legend" id="gestureLegend">
+          <li data-g="up"><i>☝️</i><b>ad</b>Índice arriba</li>
+          <li data-g="down"><i>👇</i><b>at</b>Índice abajo</li>
+          <li data-g="right"><i>👉</i><b>gh</b>Índice a tu derecha</li>
+          <li data-g="left"><i>👈</i><b>ga</b>Índice a tu izquierda</li>
+          <li data-g="thumbUp"><i>👍</i><b>ad</b>Pulgar arriba</li>
+          <li data-g="thumbDown"><i>👎</i><b>at</b>Pulgar abajo</li>
+          <li data-g="palm"><i>✋</i><b>stop</b>Palma abierta</li>
+          <li data-g="fist"><i>✊</i><b>stop</b>Puño</li>
+        </ul>
+        <p class="hint">Detección con <b>MediaPipe Gesture Recognizer</b> en el navegador (GPU). El modelo (~8 MB) se descarga sólo la primera vez. Si la cámara deja de ver la mano, el robot se detiene.</p>
       </div>
     </section>
 
@@ -182,6 +263,53 @@ btn.onclick = <span class="k">async</span> () =&gt; {
         </tbody>
       </table>
       <p class="hint"><code>#</code> es la velocidad PWM de 0 a 255 (8 bits, 1 kHz).</p>
+    </div>
+  </section>
+
+  <section class="code-sec" id="semana3" aria-labelledby="w3Title">
+    <div class="code-intro">
+      <p class="eyebrow">Semana 3 · Punto 3</p>
+      <h2 id="w3Title">Modo voz y modo gestos de mano</h2>
+      <p>No se entrena ningún modelo: se integran una API del navegador y una librería de visión por computador existentes. El trabajo propio es convertir su salida en comandos del robot.</p>
+    </div>
+    <div class="code-grid">
+<pre class="code"><code><span class="c">// Modo 3 · Voz: Web Speech API (nativa)</span>
+<span class="k">const</span> rec = <span class="k">new</span> (window.SpeechRecognition
+  || window.webkitSpeechRecognition)();
+rec.lang = <span class="s">"es-CO"</span>;
+rec.continuous = <span class="k">true</span>;       <span class="c">// escucha sin parar</span>
+rec.interimResults = <span class="k">true</span>;   <span class="c">// parciales = más rápido</span>
+
+<span class="k">const</span> MAPA = { adelante: <span class="s">"ad"</span>, atras: <span class="s">"at"</span>,
+  derecha: <span class="s">"gh"</span>, izquierda: <span class="s">"ga"</span>, para: <span class="s">"stop"</span> };
+
+rec.onresult = (e) =&gt; {
+  <span class="k">const</span> texto = e.results[e.resultIndex][<span class="n">0</span>].transcript;
+  <span class="k">for</span> (<span class="k">const</span> palabra <span class="k">of</span> <span class="f">normalizar</span>(texto).<span class="f">split</span>(<span class="s">" "</span>))
+    <span class="k">if</span> (MAPA[palabra]) <span class="f">enviar</span>(MAPA[palabra]);
+};
+rec.<span class="f">start</span>();
+
+<span class="c">// Modo 4 · Gestos: MediaPipe Gesture Recognizer</span>
+<span class="k">const</span> { FilesetResolver, GestureRecognizer } =
+  <span class="k">await</span> <span class="k">import</span>(<span class="s">"…/tasks-vision/vision_bundle.mjs"</span>);
+<span class="k">const</span> files = <span class="k">await</span> FilesetResolver.<span class="f">forVisionTasks</span>(WASM);
+<span class="k">const</span> gr = <span class="k">await</span> GestureRecognizer.<span class="f">createFromOptions</span>(files, {
+  baseOptions: { modelAssetPath: MODELO, delegate: <span class="s">"GPU"</span> },
+  runningMode: <span class="s">"VIDEO"</span>, numHands: <span class="n">1</span>
+});
+
+<span class="c">// En cada cuadro de la webcam:</span>
+<span class="k">const</span> r = gr.<span class="f">recognizeForVideo</span>(video, performance.<span class="f">now</span>());
+<span class="k">const</span> gesto = r.gestures[<span class="n">0</span>]?.[<span class="n">0</span>]?.categoryName; <span class="c">// "Open_Palm"…</span>
+<span class="k">const</span> mano  = r.landmarks[<span class="n">0</span>];  <span class="c">// 21 puntos (x, y, z)</span></code></pre>
+      <ol class="steps">
+        <li><b>SpeechRecognition</b><p>El navegador convierte el audio del micrófono en texto. Con <code>interimResults</code> llegan resultados parciales mientras hablas, así que el comando sale antes de terminar la frase.</p></li>
+        <li><b>Palabras clave → comando</b><p>Se quitan tildes y mayúsculas, y cada palabra nueva se busca en el vocabulario (<code>adelante→ad</code>, <code>derecha→gh</code>, <code>para→stop</code>…). Si hay varias, gana la última. Cada palabra se procesa una sola vez.</p></li>
+        <li><b>GestureRecognizer</b><p>MediaPipe detecta la mano en cada cuadro de la webcam y devuelve 21 landmarks y un gesto clasificado (<code>Open_Palm</code>, <code>Closed_Fist</code>, <code>Thumb_Up</code>, <code>Thumb_Down</code>…).</p></li>
+        <li><b>Landmarks → dirección</b><p>Si sólo el índice está extendido, el vector del nudillo (punto 5) a la punta (punto 8) da la dirección: arriba <code>ad</code>, abajo <code>at</code>, derecha <code>gh</code>, izquierda <code>ga</code>. Palma o puño detienen el robot.</p></li>
+        <li><b>Filtro de estabilidad</b><p>Un gesto se envía sólo si se mantiene 3 cuadros seguidos (~100 ms) y es distinto al anterior. Si la mano desaparece más de 350 ms, el robot se detiene.</p></li>
+      </ol>
     </div>
   </section>
 

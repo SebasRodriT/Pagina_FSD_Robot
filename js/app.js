@@ -1,4 +1,6 @@
 import { RobotBLE } from './ble.js';
+import { createVoiceMode } from './voice.js';
+import { createGestureMode, preloadGestures } from './gestures.js';
 
 const $ = (id) => document.getElementById(id);
 const robot = new RobotBLE();
@@ -137,7 +139,7 @@ speedEl.addEventListener('input', () => {
 });
 
 /* ---------------- Pestañas ---------------- */
-const tabs = [$('tab-buttons'), $('tab-tilt')];
+const tabs = [...document.querySelectorAll('.tabs [role="tab"]')];
 tabs.forEach((tab) =>
   tab.addEventListener('click', () => {
     if (tab.getAttribute('aria-selected') === 'true') return;
@@ -146,12 +148,19 @@ tabs.forEach((tab) =>
       t.setAttribute('aria-selected', on);
       $(t.getAttribute('aria-controls')).hidden = !on;
     });
-    // Seguridad: al cambiar de modo el robot se detiene.
-    stopTilt();
-    resetMotion();
-    if (robot.connected) robot.stop();
+    // Seguridad: al cambiar de modo se apagan los sensores y el robot se detiene.
+    stopAllModes();
+    if (tab.id === 'tab-gesture') preloadGestures().catch(() => {}); // adelanta la descarga del modelo
   })
 );
+
+function stopAllModes() {
+  stopTilt();
+  voice?.stop();
+  gesture?.stop();
+  resetMotion();
+  if (robot.connected) robot.stop();
+}
 
 /* ================= MODO 1: BOTONES ================= */
 const holdEl = $('holdMode');
@@ -348,13 +357,21 @@ function tiltLoop() {
 /* ---------------- Seguridad ---------------- */
 // Si la pestaña se oculta (bloqueo de pantalla, cambio de app) se detiene el robot.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    stopTilt();
-    resetMotion();
-    if (robot.connected) robot.stop();
-  }
+  if (document.hidden) stopAllModes();
 });
 window.addEventListener('pagehide', () => robot.connected && robot.stop());
+
+/* ================= MODOS 3 y 4: VOZ Y GESTOS ================= */
+const modeCtx = {
+  $,
+  drive,
+  toast,
+  getSpeed: speed,
+  setSpeed: (v) => { speedEl.value = v; speedEl.dispatchEvent(new Event('input')); },
+  isConnected: () => robot.connected,
+};
+const voice = createVoiceMode(modeCtx);
+const gesture = createGestureMode(modeCtx);
 
 /* ---------------- Utilidades ---------------- */
 let toastTimer;
