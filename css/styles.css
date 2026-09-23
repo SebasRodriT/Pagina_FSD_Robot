@@ -101,6 +101,7 @@ svg { width: 1em; height: 1em; }
   transition: transform 0.08s, background 0.15s, border-color 0.15s;
   touch-action: manipulation;
 }
+a.btn { text-decoration: none; color: var(--text); }
 .btn:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
@@ -461,7 +462,76 @@ select:focus { outline: none; border-color: var(--accent); }
 .legend li.active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
 
 @media (max-width: 520px) {
-  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); }
-  .tabs button { flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 0.72rem; }
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); }
+  .tabs button { flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 0.7rem; }
   .gesture-read { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ================= Navegación ================= */
+.topnav { display: flex; gap: 4px; margin-left: auto; margin-right: 8px; }
+.topnav a {
+  padding: 6px 10px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+  color: var(--muted); text-decoration: none;
+}
+.topnav a:hover { color: var(--text); background: var(--surface-2); }
+@media (max-width: 1000px) { .topnav { display: none; } }
+html { scroll-padding-top: 80px; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Pestañas: texto largo en escritorio, corto en móvil */
+.tabs .short { display: none; }
+@media (max-width: 520px) {
+  .tabs .long { display: none; }
+  .tabs .short { display: inline; }
+}
+@media (min-width: 881px) and (max-width: 1060px) {
+  .tabs button { padding: 7px 9px; }
+  .tabs button svg { display: none; }
+}
+.selector-hint {
+  max-width: 1180px; margin: -4px auto 0; padding: 0 16px; font-size: 0.8rem; color: var(--muted);
+}
+.selector-hint a { margin-right: 6px; font-family: var(--mono); font-size: 0.78rem; }
+
+/* ================= Modo rostro ================= */
+.segmented {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 12px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px;
+}
+.segmented button {
+  border: 0; background: transparent; padding: 8px; border-radius: 9px; cursor: pointer;
+  font-weight: 600; font-size: 0.88rem; color: var(--muted);
+}
+.segmented button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.face-read { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 14px; align-items: center; margin-top: 12px; }
+.face-pad { width: min(100%, 190px); }
+.face-pad .bubble { width: 16cqw; height: 16cqw; }
+.face-pad.dim { opacity: 0.35; }
+.meters { display: grid; gap: 10px; }
+.meter { display: grid; gap: 4px; font-size: 0.78rem; color: var(--muted); }
+.meter i {
+  --v: 0%;
+  display: block; height: 8px; border-radius: 8px; background: var(--line); position: relative; overflow: hidden;
+}
+.meter i::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: var(--v); background: var(--accent);
+  border-radius: 8px; transition: width 0.08s linear;
+}
+@media (max-width: 520px) { .face-read { grid-template-columns: minmax(0, 1fr); } }
+
+/* ================= Demo ================= */
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 880px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+.demo-card {
+  position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden;
+  background: var(--surface); border: 1px dashed var(--line);
+}
+.demo-card.has-video { border-style: solid; background: #000; }
+.demo-card iframe, .demo-card video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.demo-empty { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 6px; text-align: center; padding: 16px; color: var(--muted); font-size: 0.85rem; }
+.demo-empty svg { width: 42px; height: 42px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.demo-empty b { color: var(--text); font-size: 1rem; }
+.demo-script { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.demo-script li { padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; font-size: 0.88rem; color: var(--muted); }
+.demo-script b { display: block; color: var(--text); }
+.bitacora-link { margin-top: 16px; height: 48px; }

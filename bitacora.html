@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bitácora de prompts · Robot FSD</title>
+  <meta name="description" content="Bitácora del uso de un LLM durante el desarrollo de la página de control del robot: prompts, resultados, verificación y ajustes.">
+  <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .doc { max-width: 920px; margin: 0 auto; padding: 24px 16px 0; }
+    .doc h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 4px 0 8px; letter-spacing: -0.02em; }
+    .doc h2 { font-size: 1.3rem; margin: 40px 0 12px; }
+    .doc h3 { font-size: 1rem; margin: 0; }
+    .doc p, .doc li { color: var(--muted); }
+    .doc strong { color: var(--text); }
+    .lead { font-size: 1.02rem; max-width: 680px; }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 18px; }
+    .meta div { padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+    .meta span { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .meta b { font-size: 0.92rem; }
+
+    .prompt {
+      margin: 10px 0; padding: 12px 14px 12px 16px; border-left: 3px solid var(--accent);
+      background: var(--accent-soft); border-radius: 0 12px 12px 0; color: var(--text); font-size: 0.93rem;
+    }
+    .prompt::before { content: "Prompt"; display: block; font: 700 0.7rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+    .prompt.adj::before { content: "Ajuste (nuevo prompt)"; }
+    .prompt small { color: var(--muted); }
+
+    /* Iteración destacada: flujo en 4 pasos */
+    .flow { display: grid; gap: 10px; counter-reset: f; }
+    .flow > div {
+      position: relative; padding: 14px 16px 14px 58px; background: var(--surface);
+      border: 1px solid var(--line); border-radius: 14px;
+    }
+    .flow > div::before {
+      counter-increment: f; content: counter(f); position: absolute; left: 14px; top: 14px; width: 30px; height: 30px;
+      display: grid; place-items: center; border-radius: 9px; font: 700 0.85rem var(--mono);
+      background: var(--accent-soft); color: var(--accent);
+    }
+    .flow .tag { font: 700 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+    .flow p { margin: 6px 0 0; font-size: 0.9rem; }
+    .why { margin-top: 10px; padding: 14px 16px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+    .why b { color: var(--text); }
+
+    /* Registro completo */
+    .entry { margin-top: 14px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+    .entry header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+    .entry .n { font: 700 0.8rem var(--mono); color: var(--accent); }
+    .entry .model { margin-left: auto; font: 600 0.72rem var(--mono); color: var(--muted); padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; }
+    .entry dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 14px; margin: 12px 0 0; font-size: 0.9rem; }
+    .entry dt { font-weight: 700; color: var(--text); }
+    .entry dd { margin: 0; color: var(--muted); }
+    .entry dd ul { margin: 0; padding-left: 18px; }
+    .entry dd li + li { margin-top: 4px; }
+    @media (max-width: 560px) { .entry dl { grid-template-columns: 1fr; gap: 2px; } .entry dd { margin-bottom: 8px; } .entry .model { margin-left: 0; } }
+    .ok { color: var(--ok) !important; font-weight: 700; }
+    .bug { color: var(--err) !important; font-weight: 700; }
+
+    .lessons { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; padding: 0; list-style: none; }
+    .lessons li { padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; font-size: 0.9rem; }
+    .lessons b { display: block; color: var(--text); margin-bottom: 2px; }
+    .check { width: 100%; }
+    .check td:last-child { white-space: normal; color: var(--muted); }
+    .back { display: inline-flex; margin-top: 6px; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html" style="text-decoration:none;color:inherit">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="9" width="22" height="15" rx="4"/><circle cx="12" cy="16.5" r="2.2"/><circle cx="20" cy="16.5" r="2.2"/><path d="M16 9V5M13 5h6"/><path d="M3 14v6M29 14v6"/></svg>
+      <div><strong>Robot FSD</strong><span>Bitácora de prompts</span></div>
+    </a>
+    <a class="btn" href="index.html">Volver al control</a>
+  </header>
+
+  <main class="doc">
+    <p class="eyebrow">Semana 4 · Punto 4(c)</p>
+    <h1>Bitácora de prompts con el LLM</h1>
+    <p class="lead">Registro de cómo se usó un modelo de lenguaje para construir esta página: qué se le pidió, qué entregó, cómo se verificó y qué se corrigió. Los prompts se copian tal como se escribieron (sólo se abreviaron rutas locales).</p>
+
+    <div class="meta">
+      <div><span>Herramienta</span><b>Claude Code (Anthropic)</b></div>
+      <div><span>Modelos</span><b>Claude Opus 5.5 · Claude Sonnet 5</b></div>
+      <div><span>Inicio</span><b>22 de septiembre de 2026</b></div>
+      <div><span>Iteraciones registradas</span><b>7 prompts · 8 correcciones</b></div>
+    </div>
+
+    <!-- ===================================================== -->
+    <h2 id="ejemplo">Ejemplo completo de iteración</h2>
+    <p>Publicación en GitHub Pages: la primera respuesta del LLM no resolvió el problema, y el ajuste vino de comprobar el resultado real.</p>
+    <div class="flow">
+      <div>
+        <span class="tag">Prompt inicial</span>
+        <div class="prompt"><small>[captura de Settings → Pages en modo “GitHub Actions”]</small><br>Donde le doy</div>
+      </div>
+      <div>
+        <span class="tag">Resultado</span>
+        <p>El LLM indicó cambiar <em>Source</em> a “Deploy from a branch”, elegir <code>main</code> / <code>(root)</code> y guardar. Se hizo, pero el botón <em>Save</em> apareció deshabilitado. Ante la pregunta “POR QUE NO DEJA DARLE SAVE”, respondió que la configuración ya estaba guardada y leyó el aviso amarillo (“This repository is private but the published site will be public”) como una simple advertencia.</p>
+      </div>
+      <div>
+        <span class="tag">Ajuste</span>
+        <div class="prompt adj"><small>[captura del navegador en sebasrodrit.github.io/Pagina_FSD_Robot/ mostrando “404 — There isn't a GitHub Pages site here”]</small><br>Mira</div>
+        <p>En vez de repetir instrucciones, el LLM verificó el estado real: consultó la API pública de GitHub sin autenticarse (<code>api.github.com/repos/…</code> y el archivo crudo <code>index.html</code>). Ambas respondieron <code>404</code>, lo que confirma que el repositorio es <strong>privado</strong>.</p>
+      </div>
+      <div>
+        <span class="tag">Resultado final</span>
+        <p>Diagnóstico correcto: en una cuenta gratuita, GitHub Pages sólo publica desde repositorios <strong>públicos</strong>. La configuración de la rama estaba bien; la causa era la visibilidad. La solución es hacer el repositorio público (Settings → Danger Zone → Change visibility). Antes de hacerlo, el LLM señaló la consecuencia: el código queda visible.</p>
+      </div>
+    </div>
+    <div class="why">
+      <b>¿Qué llevó al ajuste?</b> Probar el resultado en el mundo real. Las instrucciones “parecían” correctas y la pantalla decía que el sitio se estaba construyendo, pero al abrir el enlace aparecía un 404. Esa evidencia (la captura) obligó a buscar la causa con datos, no a suponerla. <b>Lección:</b> el primer diagnóstico del LLM pasó por alto la pista clave (el aviso de repositorio privado); sólo se encontró la causa al verificar con una consulta a la API.
+    </div>
+
+    <h2 id="ejemplo2">Segundo ejemplo: la verificación encuentra un error</h2>
+    <div class="flow">
+      <div>
+        <span class="tag">Prompt inicial</span>
+        <div class="prompt"><small>[imagen del enunciado de la Semana 3: modo voz y modo gestos de mano]</small><br>Ahora ayudame agregar esto a la página.</div>
+      </div>
+      <div>
+        <span class="tag">Resultado</span>
+        <p>Primera versión del modo voz con <code>SpeechRecognition</code>, resultados parciales (<code>interimResults</code>) para reaccionar rápido y un contador de palabras ya procesadas para no repetir comandos.</p>
+      </div>
+      <div>
+        <span class="tag">Ajuste</span>
+        <p>Antes de entregar, se probó con un reconocedor de voz simulado que envía parciales como los de Chrome: <code>"robot ade"</code> y luego <code>"robot adelante"</code>. Resultado: <span class="bug">el robot nunca recibió “ad”</span>. Como la cantidad de palabras no cambió (2 → 2), la palabra “adelante” se consideraba ya procesada. Se corrigió: la última palabra de un parcial se vuelve a revisar hasta que coincida con una palabra clave o el resultado sea final.</p>
+      </div>
+      <div>
+        <span class="tag">Resultado final</span>
+        <p><span class="ok">La prueba pasa:</span> el parcial dispara <code>ad 200</code> apenas se completa la palabra, el resultado final no la repite, las tildes y mayúsculas se ignoran (“DERECHA” → <code>gh</code>) y si hay varias palabras clave gana la última.</p>
+      </div>
+    </div>
+    <div class="why">
+      <b>¿Qué llevó al ajuste?</b> Una prueba diseñada para el caso real (palabras que llegan incompletas), no sólo el caso fácil. El código “se veía bien” y habría fallado al hablar despacio frente al robot.
+    </div>
+
+    <!-- ===================================================== -->
+    <h2 id="registro">Registro completo</h2>
+
+    <article class="entry">
+      <header><span class="n">#1</span><h3>Página inicial: conexión BLE, modo botones y modo acelerómetro</h3><span class="model">Opus 5.5</span></header>
+      <div class="prompt">Necesito que examines el siguiente proyecto: …\PRJ-3-BLE-MOTORS-V1 (1), luego de ello crees una página web con las siguientes indicaciones: [imagen del enunciado de la Semana 2]. Quiero que utilices librerias o parecido para que los comandos sean procesados lo más rápido posible. Crea una carpeta dentro de …\Octavo Semestre\Sistemas digitales y lo vincules al siguiente repositorio: https://github.com/SebasRodriT/Pagina_FSD_Robot.git. Quiero que la página sea en base a la siguiente: https://coffeebrain.online/courses/robotia/robotia1/ pero mucho mejor en diseño y rapidez.</div>
+      <dl>
+        <dt>Resultado</dt>
+        <dd>Leyó el firmware (<code>main.cpp</code>): NimBLE, servicio <code>FFE0</code>, característica <code>FFE1</code>, comandos <code>ad/at/gh/ga #</code> y <code>stop</code>. Construyó la página sin frameworks: cola de escritura “último gana”, <code>writeValueWithoutResponse</code>, D-pad con <code>pointerdown</code>, modo inclinación con zona muerta e histéresis, telemetría y <code>minimo.html</code>.</dd>
+        <dt>Limitación</dt>
+        <dd>La página de referencia estaba protegida por Cloudflare y la extensión del navegador no estaba conectada, así que no la pudo ver. Lo dijo explícitamente y trabajó con un resumen de su estructura.</dd>
+        <dt>Verificación</dt>
+        <dd><ul>
+          <li>Carga en navegador headless: 0 errores de consola; revisión visual de capturas en escritorio y móvil.</li>
+          <li>Cola BLE con un robot simulado: de una ráfaga de 5 comandos se enviaron sólo el primero y el último; un duplicado se ignoró; <code>stop</code> siempre se envía.</li>
+          <li>Inclinación con eventos <code>deviceorientation</code> simulados: adelante, derecha, histéresis y zona muerta correctos.</li>
+        </ul></dd>
+        <dt>Correcciones</dt>
+        <dd><ul>
+          <li><span class="bug">Error real:</span> con “velocidad por niveles”, pasar de 50 % a 100 % no actualizaba el comando (se comparaba con una variable que sólo cambiaba estando conectado). Se separó en <code>tiltScale</code>.</li>
+          <li><code>await navigator.wakeLock.request()</code> podía bloquear el arranque del acelerómetro; ahora no bloquea.</li>
+          <li>Números ①–⑤ del bloque de código casi invisibles en la fuente monoespaciada; el deslizador de zona muerta se pintaba lleno.</li>
+          <li>Falso positivo descartado: la primera prueba falló porque el arnés de pruebas ejecuta el código en un “mundo aislado”; no era un error de la página.</li>
+        </ul></dd>
+      </dl>
+    </article>
+
+    <article class="entry">
+      <header><span class="n">#2–4</span><h3>Publicación en GitHub Pages</h3><span class="model">Opus 5.5 → Sonnet 5</span></header>
+      <div class="prompt"><small>[captura]</small> Donde le doy</div>
+      <div class="prompt adj"><small>[captura]</small> POR QUE NO DEJA DARLE SAVE</div>
+      <div class="prompt adj"><small>[captura del 404]</small> Mira</div>
+      <dl>
+        <dt>Resultado</dt>
+        <dd>Ver el <a href="#ejemplo">ejemplo completo</a>: el diagnóstico final (repositorio privado) salió de consultar la API de GitHub, no de la primera explicación.</dd>
+      </dl>
+    </article>
+
+    <article class="entry">
+      <header><span class="n">#5</span><h3>Semana 3: modo voz y modo gestos de mano</h3><span class="model">Opus 5.5</span></header>
+      <div class="prompt"><small>[imagen del enunciado de la Semana 3]</small> Ahora ayudame agregar esto a la página.</div>
+      <dl>
+        <dt>Resultado</dt>
+        <dd>Modo voz con la Web Speech API y modo gestos con MediaPipe Gesture Recognizer 1.0.1 (versión consultada en npm, no supuesta). La dirección del índice se calcula con landmarks y hay filtro de estabilidad.</dd>
+        <dt>Verificación</dt>
+        <dd><ul>
+          <li>Voz con reconocedor simulado (ver <a href="#ejemplo2">segundo ejemplo</a>).</li>
+          <li>Mapeo de gestos con manos sintéticas rotadas en 6 orientaciones.</li>
+          <li>Modelo real sobre imágenes oficiales de prueba de MediaPipe: índice arriba → <code>ad</code>, pulgar arriba → <code>ad</code>, puño → <code>stop</code>, “victoria” (no asignado) → <code>stop</code>.</li>
+        </ul></dd>
+        <dt>Correcciones</dt>
+        <dd><ul>
+          <li><span class="bug">Error real:</span> palabra parcial “ade” → “adelante” no disparaba el comando.</li>
+          <li><span class="bug">Rendimiento:</span> la primera inferencia tardaba 7.9 s (compilación de shaders de GPU) y congelaba el primer cuadro. Se agregó un calentamiento durante la carga: el primer cuadro bajó a 76 ms.</li>
+          <li>Dos falsos negativos investigados y descartados: una mano sintética mal construida (muñeca debajo de un dedo que apunta hacia abajo) y el rastreo del modo <code>VIDEO</code> al pasar fotos distintas seguidas. Repetido en modo <code>IMAGE</code>: el índice apuntando a un lado se detecta bien (y MediaPipe solo no lo reconocía: devolvía “None”).</li>
+        </ul></dd>
+      </dl>
+    </article>
+
+    <article class="entry">
+      <header><span class="n">#6</span><h3>Autoría de los commits</h3><span class="model">Opus 5.5</span></header>
+      <div class="prompt adj">Quite la coautoria de claude en los commits</div>
+      <dl>
+        <dt>Resultado</dt>
+        <dd>Reescribió los mensajes de los dos commits sin la línea <code>Co-Authored-By</code> y los subió con <code>--force-with-lease</code>. Antes y después verificó que los archivos fueran idénticos (sólo cambiaron los mensajes) y que en el remoto no quedara ninguna línea de coautoría. Guardó la preferencia para los siguientes commits.</dd>
+        <dt>Por qué</dt>
+        <dd>La salida inicial no se ajustaba a lo que quería el equipo. Es un ajuste de la forma de entregar, no del código.</dd>
+      </dl>
+    </article>
+
+    <article class="entry">
+      <header><span class="n">#7</span><h3>Semana 4: gestos faciales, integración y esta bitácora</h3><span class="model">Opus 5.5</span></header>
+      <div class="prompt">Ahora ayudame con esto: <small>[imagen del enunciado de la Semana 4]</small></div>
+      <dl>
+        <dt>Resultado</dt>
+        <dd>Modo rostro con MediaPipe Face Landmarker, en dos submodos: cabeza (girar, mirar arriba o abajo) y expresiones (boca abierta, beso, guiños). Selector de 5 modos con atajos <kbd>1</kbd>–<kbd>5</kbd> y enlaces <code>#modo</code>. Carga de MediaPipe compartida entre los dos modos de visión. Sección de demo y esta bitácora.</dd>
+        <dt>Verificación</dt>
+        <dd><ul>
+          <li>Modelo real sobre la foto de prueba de MediaPipe: el punto 33 (ojo derecho de la persona) cae en la izquierda de la imagen, como asume el código; al reflejar la imagen se invierte el signo del giro; boca y beso neutros muy por debajo de los umbrales.</li>
+          <li>Guiños sintéticos (párpado pintado sobre un ojo): ojo derecho → <code>gh</code>, izquierdo → <code>ga</code>.</li>
+          <li><strong>Prueba de punta a punta</strong> con cámara simulada y robot BLE simulado. Al robot llegó exactamente <code>stop → gh 200 → stop → ga 200 → stop (sin cara) → stop (cambio de modo)</code>, a 28–30 fps y 15–17 ms por cuadro.</li>
+          <li>17 casos de la lógica de cabeza y expresiones: histéresis, sensibilidad, inversión, parpadeo que no cuenta como guiño y boca abierta que no mueve la cabeza.</li>
+        </ul></dd>
+        <dt>Correcciones</dt>
+        <dd><ul>
+          <li><span class="bug">Error de diseño detectado antes de probar:</span> la inclinación se medía contra el mentón, así que abrir la boca habría contado como “mirar arriba”. Ahora se mide contra la línea de los ojos.</li>
+          <li>Si la cámara abría pero el modelo fallaba, la cámara quedaba encendida; se corrigió el orden de arranque.</li>
+          <li>Falso positivo descartado: la prueba de punta a punta no conectaba porque cambiar sólo el <code>#hash</code> no recarga la página y el robot simulado nunca se instaló.</li>
+        </ul></dd>
+      </dl>
+    </article>
+
+    <!-- ===================================================== -->
+    <h2>Cómo se verificó el trabajo del LLM</h2>
+    <ul class="lessons">
+      <li><b>No aceptar código sin ejecutarlo</b>Cada entrega se cargó en un navegador real (headless), revisando la consola y las capturas.</li>
+      <li><b>Simular lo que no hay en el computador</b>Robot BLE, cámara, micrófono y acelerómetro simulados, para probar la cadena completa hasta los bytes que llegan al robot.</li>
+      <li><b>Usar los modelos reales</b>MediaPipe se probó con sus imágenes oficiales, no sólo con datos inventados.</li>
+      <li><b>Dudar de la prueba también</b>Cuatro fallos resultaron ser errores del arnés de pruebas, no de la página. Se investigaron hasta encontrar la causa antes de “corregir” código que estaba bien.</li>
+      <li><b>Consultar, no suponer</b>La versión de MediaPipe se consultó en npm y la visibilidad del repositorio en la API de GitHub.</li>
+      <li><b>Lo que el LLM no puede verificar</b>El comportamiento sobre el robot real (motores, cableado, sentido de giro) sólo lo puede comprobar el equipo. Ver la tabla siguiente.</li>
+    </ul>
+
+    <h2 id="robot">Verificación sobre el robot real</h2>
+    <p>La completa el equipo al grabar el video demo.</p>
+    <div class="cmds">
+      <table class="check">
+        <thead><tr><th>Modo</th><th>Qué probar</th><th>Resultado en el robot</th></tr></thead>
+        <tbody>
+          <tr><td>1 · Botones</td><td>ad, at, gh, ga, stop; soltar detiene</td><td>Pendiente</td></tr>
+          <tr><td>2 · Acelerómetro</td><td>Calibrar e inclinar en 4 direcciones</td><td>Pendiente</td></tr>
+          <tr><td>3 · Voz</td><td>“adelante”, “derecha”, “izquierda”, “atrás”, “para”</td><td>Pendiente</td></tr>
+          <tr><td>4 · Gestos de mano</td><td>Índice en 4 direcciones, palma</td><td>Pendiente</td></tr>
+          <tr><td>5 · Rostro</td><td>Cabeza en 4 direcciones; boca, beso, guiños</td><td>Pendiente</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <a class="back" href="index.html#demo">← Volver a la página de control</a>
+  </main>
+
+  <footer class="foot">
+    <span>Fundamentos de Sistemas Digitales · Universidad de los Andes · 2026</span>
+    <span>Firmware base: Fredy Segura-Quijano · PRJ-3-BLE-MOTORS-V1</span>
+  </footer>
+</body>
+</html>

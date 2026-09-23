@@ -9,15 +9,13 @@
  * Por qué es rápido:
  *   - La librería (~150 KB) y el modelo (~8 MB) se descargan sólo al abrir la
  *     pestaña, y quedan en caché para las siguientes visitas.
- *   - Inferencia en GPU (WebGL) con respaldo a CPU.
- *   - Se procesa cada cuadro nuevo de video (requestVideoFrameCallback), nunca
- *     el mismo cuadro dos veces.
+ *   - GPU, calentamiento y una inferencia por cuadro nuevo: ver mp.js.
  *   - Filtro de estabilidad: el gesto debe mantenerse 3 cuadros (~100 ms)
  *     antes de enviarse, para no mandar comandos por detecciones sueltas.
  */
 
-const MP_VERSION = '1.0.1';
-const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`;
+import { loadVision, createTask, openCamera, closeCamera, eachVideoFrame, perfMeter } from './mp.js';
+
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task';
 
@@ -45,30 +43,16 @@ let libPromise = null;
 export function preloadGestures() {
   if (!libPromise) {
     libPromise = (async () => {
-      const { FilesetResolver, GestureRecognizer } = await import(`${MP_URL}/vision_bundle.mjs`);
-      const fileset = await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
-      const options = (delegate) => ({
-        baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      const { mod, fileset } = await loadVision();
+      const recognizer = await createTask(mod.GestureRecognizer, fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL },
         runningMode: 'VIDEO',
         numHands: 1,
         minHandDetectionConfidence: 0.6,
         minHandPresenceConfidence: 0.6,
         minTrackingConfidence: 0.5,
       });
-      let recognizer;
-      try {
-        recognizer = await GestureRecognizer.createFromOptions(fileset, options('GPU'));
-      } catch {
-        recognizer = await GestureRecognizer.createFromOptions(fileset, options('CPU'));
-      }
-      // Calentamiento: la primera inferencia compila los shaders de la GPU (puede
-      // tardar varios segundos). Se hace aquí para que el primer cuadro de la
-      // cámara no se congele.
-      const warm = document.createElement('canvas');
-      warm.width = warm.height = 64;
-      warm.getContext('2d').fillRect(0, 0, 64, 64);
-      recognizer.recognizeForVideo(warm, performance.now());
-      return { recognizer, connections: GestureRecognizer.HAND_CONNECTIONS };
+      return { recognizer, connections: mod.GestureRecognizer.HAND_CONNECTIONS };
     })();
     libPromise.catch(() => { libPromise = null; });
   }
@@ -116,18 +100,16 @@ export function createGestureMode({ $, drive, getSpeed, toast, isConnected }) {
   const stage = $('gestureStage');
   const items = new Map([...document.querySelectorAll('#gestureLegend [data-g]')].map((el) => [el.dataset.g, el]));
 
+  const perf = perfMeter(fpsEl);
+
   let active = false;
   let stream = null;
   let lib = null;
-  let frameHandle = 0;
-  let lastVideoTime = -1;
+  let stopLoop = null;
   let candidate = null;
   let candidateCount = 0;
   let committed = undefined;
   let lastHandAt = 0;
-  let fpsFrames = 0;
-  let fpsT0 = 0;
-  let inferMs = 0;
 
   const setStatus = (state, text) => { status.dataset.state = state; status.textContent = text; };
 
@@ -137,64 +119,35 @@ export function createGestureMode({ $, drive, getSpeed, toast, isConnected }) {
     btn.disabled = true;
     setStatus('starting', 'Cargando modelo de MediaPipe…');
     try {
-      const [l, s] = await Promise.all([
-        preloadGestures(),
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
-          audio: false,
-        }),
-      ]);
-      if (!active) { s.getTracks().forEach((t) => t.stop()); return; }
-      lib = l;
-      stream = s;
-      video.srcObject = s;
-      await video.play();
+      const libP = preloadGestures(); // modelo y cámara arrancan en paralelo
+      stream = await openCamera(video);
+      lib = await libP;
+      if (!active) { closeCamera(video, stream); stream = null; return; }
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       stage.classList.add('live');
       committed = undefined;
       candidate = null;
       lastHandAt = performance.now();
-      fpsT0 = performance.now();
-      fpsFrames = 0;
+      perf.reset();
       setStatus('listening', 'Muestra la mano a la cámara');
       btn.querySelector('span').textContent = 'Apagar cámara';
       btn.classList.add('on');
-      schedule();
+      stopLoop = eachVideoFrame(video, (t0) => {
+        const res = lib.recognizer.recognizeForVideo(video, t0);
+        perf.add(performance.now() - t0);
+        handle(res, t0);
+        draw(res);
+      });
     } catch (err) {
       active = false;
+      closeCamera(video, stream);
       const msg = err.name === 'NotAllowedError' ? 'Permiso de cámara denegado' : `No se pudo iniciar: ${err.message}`;
       setStatus('error', msg);
       toast(msg);
     } finally {
       btn.disabled = false;
     }
-  }
-
-  function schedule() {
-    if (!active) return;
-    frameHandle = video.requestVideoFrameCallback
-      ? video.requestVideoFrameCallback(tick)
-      : requestAnimationFrame(tick);
-  }
-
-  function tick() {
-    if (!active) return;
-    if (video.currentTime !== lastVideoTime && video.readyState >= 2) {
-      lastVideoTime = video.currentTime;
-      const t0 = performance.now();
-      const res = lib.recognizer.recognizeForVideo(video, t0);
-      inferMs = inferMs * 0.8 + (performance.now() - t0) * 0.2;
-      handle(res, t0);
-      draw(res);
-      fpsFrames++;
-      if (t0 - fpsT0 > 500) {
-        fpsEl.textContent = `${Math.round((fpsFrames * 1000) / (t0 - fpsT0))} fps · ${inferMs.toFixed(0)} ms`;
-        fpsT0 = t0;
-        fpsFrames = 0;
-      }
-    }
-    schedule();
   }
 
   function handle(res, now) {
@@ -247,11 +200,10 @@ export function createGestureMode({ $, drive, getSpeed, toast, isConnected }) {
   function stop() {
     const was = active;
     active = false;
-    if (video.cancelVideoFrameCallback && frameHandle) video.cancelVideoFrameCallback(frameHandle);
-    cancelAnimationFrame(frameHandle);
-    stream?.getTracks().forEach((t) => t.stop());
+    stopLoop?.();
+    stopLoop = null;
+    closeCamera(video, stream);
     stream = null;
-    video.srcObject = null;
     stage.classList.remove('live');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     items.forEach((el) => el.classList.remove('active'));
@@ -259,7 +211,7 @@ export function createGestureMode({ $, drive, getSpeed, toast, isConnected }) {
     btn.classList.remove('on');
     cmdEl.textContent = 'stop';
     labelEl.textContent = '—';
-    fpsEl.textContent = '';
+    perf.reset();
     committed = undefined;
     if (was) setStatus('idle', 'Cámara apagada');
   }

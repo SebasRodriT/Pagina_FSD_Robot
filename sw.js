@@ -3,11 +3,11 @@
 //    nueva si hay internet; funciona sin conexión en el campo).
 //  - MediaPipe (librería, wasm y modelo): caché primero. Son archivos con versión
 //    fija que no cambian, así que la segunda vez el modo gestos arranca al instante.
-const CACHE = 'robot-fsd-v2';
+const CACHE = 'robot-fsd-v3';
 const MP_CACHE = 'robot-fsd-mediapipe-v1';
 const ASSETS = [
-  './', 'index.html', 'minimo.html', 'css/styles.css',
-  'js/app.js', 'js/ble.js', 'js/voice.js', 'js/gestures.js',
+  './', 'index.html', 'minimo.html', 'bitacora.html', 'css/styles.css',
+  'js/app.js', 'js/ble.js', 'js/voice.js', 'js/mp.js', 'js/gestures.js', 'js/face.js',
   'icon.svg', 'manifest.webmanifest',
 ];
 const IMMUTABLE = [

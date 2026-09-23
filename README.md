@@ -6,8 +6,11 @@ Página para controlar el robot de dos motores (ESP32-C3 Super Mini + driver Min
 - **Modo 2: Acelerómetro.** `DeviceOrientation` (β adelante/atrás, γ izquierda/derecha) convertido a comandos discretos con zona muerta, histéresis y calibración de cero.
 - **Modo 3: Voz.** Web Speech API (`SpeechRecognition`, nativa del navegador). Palabras clave como *adelante, atrás, derecha, izquierda, para, rápido, lento* se convierten en comandos; actúa sobre los resultados parciales para reaccionar mientras hablas.
 - **Modo 4: Gestos de mano.** MediaPipe Gesture Recognizer con la webcam, en GPU. Palma o puño = `stop`; índice arriba/abajo/derecha/izquierda = `ad`/`at`/`gh`/`ga` (calculado con los landmarks); pulgar arriba/abajo = `ad`/`at`.
+- **Modo 5: Gestos faciales.** MediaPipe Face Landmarker. Submodo *Cabeza*: mirar arriba/abajo = `ad`/`at`, girar a tu derecha/izquierda = `gh`/`ga`. Submodo *Expresiones*: boca abierta = `ad`, beso = `at`, guiño derecho/izquierdo = `gh`/`ga`. Todo relativo a una calibración automática de la cara neutra.
+- **Selector de modos.** Pestañas, teclas `1`–`5` y enlaces directos (`#botones`, `#acelerometro`, `#voz`, `#gestos`, `#rostro`). Al cambiar de modo se apagan los sensores y el robot recibe `stop`.
 - **Telemetría.** Último comando, tiempo de escritura, tiempo de ida y vuelta (hasta el `notify` del robot), log TX/RX y consola de comandos manuales.
 - **`minimo.html`**: el código mínimo de conexión (punto 2a).
+- **`bitacora.html`**: bitácora de prompts con el LLM, con ejemplos completos de iteración (punto 4c).
 
 ## Protocolo del firmware
 
@@ -60,6 +63,28 @@ No usa frameworks: el JavaScript propio pesa unos 30 KB sin dependencias (MediaP
 - La librería (`@mediapipe/tasks-vision@1.0.1`) y el modelo (~8 MB) se cargan sólo al abrir la pestaña Gestos, y el service worker los guarda en caché.
 - Al cargar se hace una inferencia de calentamiento para que el primer cuadro no se congele compilando los shaders de la GPU.
 - La voz usa el servicio de Google de Chrome, así que **necesita internet**. Micrófono y cámara requieren HTTPS.
+
+## Modo gestos faciales (Semana 4)
+
+| Submodo | Gesto | Comando |
+|---|---|---|
+| Cabeza | mirar arriba / abajo | `ad` / `at` |
+| Cabeza | girar a tu derecha / izquierda | `gh` / `ga` |
+| Cabeza | al frente | `stop` |
+| Expresiones | boca abierta (`jawOpen` > 0.45) | `ad` |
+| Expresiones | beso (`mouthPucker` > 0.55) | `at` |
+| Expresiones | guiño ojo derecho / izquierdo | `gh` / `ga` |
+| Expresiones | cara neutra | `stop` |
+
+- Al encender la cámara se promedian 12 cuadros de la cara neutra (botón *Calibrar* para repetir).
+- El giro se mide con la nariz frente al centro de las mejillas.
+- La inclinación se mide con la nariz frente a la línea de los ojos. No se usa el mentón, para que abrir la boca no cuente como mirar arriba.
+- El guiño se mide con la apertura de cada ojo relativa a la calibración: uno cerrado y el otro abierto. Un parpadeo normal cierra ambos ojos, así que no cuenta.
+- Sin rostro por más de 400 ms → `stop`.
+- `js/mp.js` comparte la librería MediaPipe entre los modos de mano y rostro: se importa una sola vez.
+
+### Video demo
+Para agregar el enlace, pon la URL en `data-src` de `#demoVideo` en `index.html`. Acepta YouTube, Google Drive o `.mp4`.
 
 ## Seguridad
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Robot FSD · Control BLE</title>
-  <meta name="description" content="Control del robot ESP32-C3 por Web Bluetooth: botones, acelerómetro, voz y gestos de mano.">
+  <meta name="description" content="Control del robot ESP32-C3 por Web Bluetooth con cinco modos: botones, acelerómetro, voz, gestos de mano y gestos faciales.">
   <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -24,6 +24,12 @@
         <span>Web Bluetooth · ESP32-C3</span>
       </div>
     </div>
+    <nav class="topnav" aria-label="Secciones">
+      <a href="#control">Control</a>
+      <a href="#documentacion">Documentación</a>
+      <a href="#demo">Demo</a>
+      <a href="bitacora.html">Bitácora LLM</a>
+    </nav>
     <div class="conn">
       <span class="pill" id="status" data-state="disconnected"><i></i><span id="statusText">Desconectado</span></span>
       <button class="btn btn-primary" id="connectBtn" type="button">
@@ -40,21 +46,24 @@
 
   <main class="layout">
     <!-- ================= CONTROL ================= -->
-    <section class="card control" aria-labelledby="ctlTitle">
+    <section class="card control" id="control" aria-labelledby="ctlTitle">
       <div class="card-head">
         <h2 id="ctlTitle">Control</h2>
         <div class="tabs" role="tablist">
           <button role="tab" id="tab-buttons" aria-selected="true" aria-controls="panel-buttons">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>Botones
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg><span>Botones</span>
           </button>
           <button role="tab" id="tab-tilt" aria-selected="false" aria-controls="panel-tilt">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" transform="rotate(-18 12 12)"/><path d="M11 18h2" transform="rotate(-18 12 12)"/></svg>Acelerómetro
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" transform="rotate(-18 12 12)"/><path d="M11 18h2" transform="rotate(-18 12 12)"/></svg><span class="long">Acelerómetro</span><span class="short">Inclinar</span>
           </button>
           <button role="tab" id="tab-voice" aria-selected="false" aria-controls="panel-voice">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Voz
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Voz</span>
           </button>
           <button role="tab" id="tab-gesture" aria-selected="false" aria-controls="panel-gesture">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V13m0-4.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.6L4.3 15a1.6 1.6 0 0 1 2.6-1.9L8 14.5"/></svg>Gestos
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V13m0-4.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.6L4.3 15a1.6 1.6 0 0 1 2.6-1.9L8 14.5"/></svg><span class="long">Gestos</span><span class="short">Mano</span>
+          </button>
+          <button role="tab" id="tab-face" aria-selected="false" aria-controls="panel-face">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="3" stroke-linecap="round"/></svg><span>Rostro</span>
           </button>
         </div>
       </div>
@@ -183,6 +192,68 @@
         </ul>
         <p class="hint">Detección con <b>MediaPipe Gesture Recognizer</b> en el navegador (GPU). El modelo (~8 MB) se descarga sólo la primera vez. Si la cámara deja de ver la mano, el robot se detiene.</p>
       </div>
+
+      <!-- ---------- Modo 5: Gestos faciales ---------- -->
+      <div class="panel" id="panel-face" role="tabpanel" aria-labelledby="tab-face" hidden>
+        <div class="segmented" id="faceSub" role="group" aria-label="Submodo">
+          <button type="button" data-sub="head" aria-pressed="true">Cabeza</button>
+          <button type="button" data-sub="expr" aria-pressed="false">Expresiones</button>
+        </div>
+        <div class="stage" id="faceStage">
+          <video id="faceVideo" playsinline muted></video>
+          <canvas id="faceCanvas"></canvas>
+          <div class="stage-empty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v13H3z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>La cámara está apagada</span>
+          </div>
+          <span class="stage-fps" id="faceFps"></span>
+        </div>
+        <div class="face-read">
+          <div class="level face-pad" id="facePad" aria-hidden="true">
+            <span class="lbl l-up">ad</span><span class="lbl l-down">at</span>
+            <span class="lbl l-left">ga</span><span class="lbl l-right">gh</span>
+            <div class="dead" style="--d: 40%"></div>
+            <div class="cross"></div>
+            <div class="bubble" id="faceDot"></div>
+          </div>
+          <div class="meters">
+            <div class="meter"><span>Boca abierta</span><i id="mJaw"></i></div>
+            <div class="meter"><span>Beso</span><i id="mPucker"></i></div>
+            <div class="meter"><span>Ojo derecho cerrado</span><i id="mEyeR"></i></div>
+            <div class="meter"><span>Ojo izquierdo cerrado</span><i id="mEyeL"></i></div>
+          </div>
+        </div>
+        <div class="gesture-read">
+          <div class="kv"><span>Gesto</span><b id="faceLabel">—</b></div>
+          <div class="kv big"><span>Comando</span><b id="faceCmd">stop</b></div>
+        </div>
+        <div class="tilt-actions">
+          <button class="btn btn-primary" id="faceToggle" type="button"><span>Activar cámara</span></button>
+          <button class="btn" id="faceCalibrate" type="button" disabled>Calibrar</button>
+        </div>
+        <p class="mode-status" id="faceStatus" data-state="idle">Cámara apagada</p>
+        <ul class="legend" id="faceLegendHead">
+          <li data-f="up"><i>⬆️</i><b>ad</b>Mirar arriba</li>
+          <li data-f="down"><i>⬇️</i><b>at</b>Mirar abajo</li>
+          <li data-f="right"><i>➡️</i><b>gh</b>Girar a tu derecha</li>
+          <li data-f="left"><i>⬅️</i><b>ga</b>Girar a tu izquierda</li>
+          <li data-f="center"><i>⏺️</i><b>stop</b>Al frente</li>
+        </ul>
+        <ul class="legend" id="faceLegendExpr" hidden>
+          <li data-f="mouth"><i>😮</i><b>ad</b>Boca abierta</li>
+          <li data-f="kiss"><i>😗</i><b>at</b>Beso</li>
+          <li data-f="winkR"><i>😉</i><b>gh</b>Guiño ojo derecho</li>
+          <li data-f="winkL"><i>😉</i><b>ga</b>Guiño ojo izquierdo</li>
+          <li data-f="neutral"><i>😐</i><b>stop</b>Cara neutra</li>
+        </ul>
+        <div class="opts grid2">
+          <label class="field">Sensibilidad <output id="faceSensOut">1.0×</output>
+            <input type="range" id="faceSens" min="0.6" max="1.8" step="0.1" value="1">
+          </label>
+          <label class="switch"><input type="checkbox" id="faceInvert"><span></span>Invertir arriba/abajo (cabeza)</label>
+        </div>
+        <p class="hint">Detección con <b>MediaPipe Face Landmarker</b> (478 puntos y 52 blendshapes). Al encender la cámara se calibra con tu cara neutra mirando al frente; todo se mide relativo a esa posición. Si la cámara deja de ver la cara, el robot se detiene.</p>
+      </div>
     </section>
 
     <!-- ================= TELEMETRÍA ================= -->
@@ -205,6 +276,9 @@
     </section>
   </main>
 
+  <p class="selector-hint">Atajos del selector: teclas <kbd>1</kbd>–<kbd>5</kbd> · cada modo tiene su enlace: <a href="#botones">#botones</a> <a href="#acelerometro">#acelerometro</a> <a href="#voz">#voz</a> <a href="#gestos">#gestos</a> <a href="#rostro">#rostro</a></p>
+
+  <div id="documentacion"></div>
   <!-- ================= CÓDIGO (punto a) ================= -->
   <section class="code-sec" id="codigo" aria-labelledby="codeTitle">
     <div class="code-intro">
@@ -311,6 +385,69 @@ rec.<span class="f">start</span>();
         <li><b>Filtro de estabilidad</b><p>Un gesto se envía sólo si se mantiene 3 cuadros seguidos (~100 ms) y es distinto al anterior. Si la mano desaparece más de 350 ms, el robot se detiene.</p></li>
       </ol>
     </div>
+  </section>
+
+  <section class="code-sec" id="semana4" aria-labelledby="w4Title">
+    <div class="code-intro">
+      <p class="eyebrow">Semana 4 · Punto 4(a)</p>
+      <h2 id="w4Title">Modo gestos faciales</h2>
+      <p>MediaPipe Face Landmarker entrega 478 puntos de la cara y 52 blendshapes (valores de 0 a 1 como <code>jawOpen</code> o <code>mouthPucker</code>). El trabajo propio es convertirlos en comandos, siempre relativos a una calibración de la cara neutra.</p>
+    </div>
+    <div class="code-grid">
+<pre class="code"><code><span class="k">const</span> fl = <span class="k">await</span> FaceLandmarker.<span class="f">createFromOptions</span>(files, {
+  baseOptions: { modelAssetPath: MODELO, delegate: <span class="s">"GPU"</span> },
+  runningMode: <span class="s">"VIDEO"</span>, numFaces: <span class="n">1</span>,
+  outputFaceBlendshapes: <span class="k">true</span>
+});
+<span class="k">const</span> r  = fl.<span class="f">detectForVideo</span>(video, performance.<span class="f">now</span>());
+<span class="k">const</span> lm = r.faceLandmarks[<span class="n">0</span>];              <span class="c">// 478 puntos</span>
+<span class="k">const</span> bs = r.faceBlendshapes[<span class="n">0</span>].categories;  <span class="c">// 52 valores</span>
+
+<span class="c">// Cabeza: posición de la nariz (punto 1)</span>
+<span class="k">const</span> giro = (lm[<span class="n">1</span>].x - centroMejillas) / anchoCara;
+<span class="k">const</span> incl = (lm[<span class="n">1</span>].y - lineaOjos) / distanciaOjos;
+<span class="k">if</span> (incl - base.incl &lt; -umbral) <span class="f">enviar</span>(<span class="s">"ad"</span>); <span class="c">// mira arriba</span>
+<span class="k">if</span> (giro - base.giro &lt; -umbral) <span class="f">enviar</span>(<span class="s">"gh"</span>); <span class="c">// gira a su derecha</span>
+
+<span class="c">// Expresiones: blendshapes y apertura de cada ojo</span>
+<span class="k">if</span> (<span class="f">valor</span>(bs, <span class="s">"jawOpen"</span>) &gt; <span class="n">0.45</span>)     <span class="f">enviar</span>(<span class="s">"ad"</span>);
+<span class="k">if</span> (<span class="f">valor</span>(bs, <span class="s">"mouthPucker"</span>) &gt; <span class="n">0.55</span>) <span class="f">enviar</span>(<span class="s">"at"</span>);
+<span class="k">if</span> (ojoDer / base.ojoDer &lt; <span class="n">0.6</span>)          <span class="f">enviar</span>(<span class="s">"gh"</span>); <span class="c">// guiño</span></code></pre>
+      <ol class="steps">
+        <li><b>Calibración</b><p>Al encender la cámara se promedian 12 cuadros de tu cara neutra mirando al frente. Todo se mide como diferencia contra ese promedio, así no importa la altura de la cámara ni la forma de la cara.</p></li>
+        <li><b>Orientación de la cabeza</b><p>El giro es el desplazamiento horizontal de la nariz respecto al centro de las mejillas. La inclinación es su distancia vertical a la línea de los ojos, dividida por la distancia entre ojos. Se mide contra los ojos y no contra el mentón para que abrir la boca no cuente como “mirar arriba”.</p></li>
+        <li><b>Expresiones</b><p>La boca abierta y el beso salen de los blendshapes <code>jawOpen</code> y <code>mouthPucker</code>. El guiño se calcula con la apertura de cada ojo (puntos del párpado) comparada con la calibración: un ojo por debajo del 60 % y el otro abierto. Un parpadeo normal cierra ambos ojos, así que no cuenta.</p></li>
+        <li><b>Estabilidad</b><p>Igual que en los gestos de mano: el gesto debe mantenerse 3 cuadros, la cabeza tiene histéresis (para salir basta bajar al 70 % del umbral) y sin rostro por más de 400 ms el robot se detiene.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="code-sec" id="demo" aria-labelledby="demoTitle">
+    <div class="code-intro">
+      <p class="eyebrow">Semana 4 · Puntos 4(b) y 4(c)</p>
+      <h2 id="demoTitle">Integración, video demo y bitácora</h2>
+      <p>Los cinco modos viven en esta misma página y comparten la conexión Bluetooth, la velocidad y la telemetría. Al cambiar de modo con el selector, el anterior apaga su sensor y el robot recibe <code>stop</code>.</p>
+    </div>
+    <div class="demo-grid">
+      <div class="demo-card" id="demoVideo" data-src="">
+        <div class="demo-empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3"/></svg>
+          <b>Video demo de los 5 modos</b>
+          <span>Se mostrará aquí cuando se agregue el enlace.</span>
+        </div>
+      </div>
+      <ol class="demo-script">
+        <li><b>1 · Botones</b> adelante, atrás, giros y stop con el D-pad.</li>
+        <li><b>2 · Acelerómetro</b> calibrar e inclinar el celular en las 4 direcciones.</li>
+        <li><b>3 · Voz</b> “adelante”, “derecha”, “izquierda”, “atrás”, “para”.</li>
+        <li><b>4 · Gestos de mano</b> índice en 4 direcciones, palma para detener.</li>
+        <li><b>5 · Rostro</b> girar y levantar la cabeza; boca abierta, beso y guiños.</li>
+      </ol>
+    </div>
+    <a class="btn bitacora-link" href="bitacora.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg>
+      <span>Ver la bitácora de prompts con el LLM</span>
+    </a>
   </section>
 
   <footer class="foot">
