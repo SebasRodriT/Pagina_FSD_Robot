@@ -1,6 +1,7 @@
 import { RobotBLE } from './ble.js';
 import { createVoiceMode } from './voice.js';
 import { createGestureMode, preloadGestures } from './gestures.js';
+import { createFaceMode, preloadFace } from './face.js';
 
 const $ = (id) => document.getElementById(id);
 const robot = new RobotBLE();
@@ -138,26 +139,67 @@ speedEl.addEventListener('input', () => {
   if (currentAction) drive(currentAction, currentScale);
 });
 
-/* ---------------- Pestañas ---------------- */
-const tabs = [...document.querySelectorAll('.tabs [role="tab"]')];
-tabs.forEach((tab) =>
-  tab.addEventListener('click', () => {
-    if (tab.getAttribute('aria-selected') === 'true') return;
-    tabs.forEach((t) => {
-      const on = t === tab;
-      t.setAttribute('aria-selected', on);
-      $(t.getAttribute('aria-controls')).hidden = !on;
-    });
-    // Seguridad: al cambiar de modo se apagan los sensores y el robot se detiene.
-    stopAllModes();
-    if (tab.id === 'tab-gesture') preloadGestures().catch(() => {}); // adelanta la descarga del modelo
-  })
-);
+/* ---------------- Selector de modos ---------------- */
+// Cada modo tiene su pestaña, un atajo de teclado (1–5) y un enlace (#voz, #rostro…).
+const MODES = [
+  { tab: 'tab-buttons', hash: 'botones' },
+  { tab: 'tab-tilt', hash: 'acelerometro' },
+  { tab: 'tab-voice', hash: 'voz' },
+  { tab: 'tab-gesture', hash: 'gestos', preload: () => preloadGestures() },
+  { tab: 'tab-face', hash: 'rostro', preload: () => preloadFace() },
+];
+const tabs = MODES.map((m) => $(m.tab));
+
+function selectMode(i, { updateHash = true } = {}) {
+  const tab = tabs[i];
+  if (!tab || tab.getAttribute('aria-selected') === 'true') return;
+  tabs.forEach((t) => {
+    const on = t === tab;
+    t.setAttribute('aria-selected', on);
+    t.tabIndex = on ? 0 : -1;
+    $(t.getAttribute('aria-controls')).hidden = !on;
+  });
+  // Seguridad: al cambiar de modo se apagan los sensores y el robot se detiene.
+  stopAllModes();
+  MODES[i].preload?.().catch(() => {}); // adelanta la descarga del modelo
+  if (updateHash) history.replaceState(null, '', `#${MODES[i].hash}`);
+}
+
+tabs.forEach((tab, i) => {
+  tab.tabIndex = i === 0 ? 0 : -1;
+  tab.addEventListener('click', () => selectMode(i));
+  // Flechas izquierda/derecha entre pestañas (patrón accesible de tabs)
+  tab.addEventListener('keydown', (e) => {
+    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const j = (i + d + tabs.length) % tabs.length;
+    selectMode(j);
+    tabs[j].focus();
+  });
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select')) return;
+  const n = +e.key;
+  if (n >= 1 && n <= MODES.length) selectMode(n - 1);
+});
+
+function modeFromHash() {
+  const i = MODES.findIndex((m) => `#${m.hash}` === location.hash);
+  if (i >= 0) {
+    selectMode(i, { updateHash: false });
+    $('control').scrollIntoView({ block: 'start' });
+  }
+}
+window.addEventListener('hashchange', modeFromHash);
 
 function stopAllModes() {
   stopTilt();
   voice?.stop();
   gesture?.stop();
+  face?.stop();
   resetMotion();
   if (robot.connected) robot.stop();
 }
@@ -372,6 +414,33 @@ const modeCtx = {
 };
 const voice = createVoiceMode(modeCtx);
 const gesture = createGestureMode(modeCtx);
+const face = createFaceMode(modeCtx);
+
+const faceSens = $('faceSens');
+faceSens.addEventListener('input', () => {
+  $('faceSensOut').textContent = `${(+faceSens.value).toFixed(1)}×`;
+  faceSens.style.setProperty('--p', `${((faceSens.value - 0.6) / 1.2) * 100}%`);
+});
+faceSens.dispatchEvent(new Event('input'));
+
+modeFromHash();
+
+/* ---------------- Video demo ---------------- */
+// Pega el enlace en data-src de #demoVideo (YouTube, Google Drive o un .mp4).
+(function embedDemo() {
+  const box = $('demoVideo');
+  const src = box.dataset.src?.trim();
+  if (!src) return;
+  let url = src;
+  const yt = src.match(/(?:youtu\.be\/|v=|shorts\/)([\w-]{11})/);
+  const drive = src.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
+  if (yt) url = `https://www.youtube-nocookie.com/embed/${yt[1]}`;
+  else if (drive) url = `https://drive.google.com/file/d/${drive[1]}/preview`;
+  box.innerHTML = /\.(mp4|webm)(\?|$)/i.test(src)
+    ? `<video src="${url}" controls playsinline preload="metadata"></video>`
+    : `<iframe src="${url}" title="Video demo" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+  box.classList.add('has-video');
+})();
 
 /* ---------------- Utilidades ---------------- */
 let toastTimer;
